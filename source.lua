@@ -101,39 +101,10 @@ local Window = Rayfield:CreateWindow({
 
 -- Создание вкладок
 local MainTab = Window:CreateTab("🪐 Main", nil)
+local DictTab = Window:CreateTab("📖 Dictionary", nil)
 local SettingsTab = Window:CreateTab("⚙️ Settings", nil)
 
 local statusLabel = MainTab:CreateLabel("⏳ Loading and indexing 282k dictionary...")
-
--- Функция поиска главного фрейма Rayfield
-local function getRayfieldMainFrame()
-    local coreGui = game:GetService("CoreGui")
-    local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
-    
-    local rayfieldGui = coreGui:FindFirstChild("Rayfield") or (playerGui and playerGui:FindFirstChild("Rayfield"))
-    if rayfieldGui then
-        for _, descendant in pairs(rayfieldGui:GetDescendants()) do
-            if descendant:IsA("Frame") and (descendant.Name == "Main" or descendant.Name == "MainFrame" or descendant:FindFirstChild("TopBar")) then
-                return descendant
-            end
-        end
-        return rayfieldGui:FindFirstChildWhichIsA("Frame")
-    end
-    return nil
-end
-
--- Функция установщика размера
-local function setWindowScale(scaleValue)
-    local mainFrame = getRayfieldMainFrame()
-    if mainFrame then
-        local scaler = mainFrame:FindFirstChildOfClass("UIScale")
-        if not scaler then
-            scaler = Instance.new("UIScale")
-            scaler.Parent = mainFrame
-        end
-        scaler.Scale = scaleValue
-    end
-end
 
 -- Основная база слов
 local globalWordsList = {} 
@@ -176,6 +147,7 @@ local autoJoinDelay = 2
 local jitterEnabled = false 
 local jitterIntensity = 0.05 
 local rngVariationPercent = 0 
+local priorityMode = "Special" -- "Special", "Long", "Short"
 
 local lastChunk = ""
 local lastTypeTime = 0
@@ -376,36 +348,57 @@ local function copyword(bruteforce)
         if promptLabel then promptLabel:Set("Current Prompt: " .. contains:upper()) end
 
         local promptLower = contains:lower()
+        local validMatches = {}
         local specialMatches = {}
-        local normalMatches = {}
         
         for i = 1, #globalWordsList do
             local candidate = globalWordsList[i]
             if string.find(candidate, promptLower, 1, true) then
                 if not sessionUsedWords[candidate] and #candidate <= lettercap then
+                    table.insert(validMatches, candidate)
                     if string.find(candidate, "-", 1, true) or string.find(candidate, "'", 1, true) then
                         table.insert(specialMatches, candidate)
-                    else
-                        table.insert(normalMatches, candidate)
                     end
                 end
             end
         end
 
-        if solutionsLabel then solutionsLabel:Set("Solutions Found: " .. (#specialMatches + #normalMatches)) end
+        if solutionsLabel then solutionsLabel:Set("Solutions Found: " .. #validMatches) end
 
         local finalword = nil
-        
-        if #specialMatches > 0 then
-            finalword = specialMatches[math.random(1, #specialMatches)]
-        elseif #normalMatches > 0 then
-            local shortestNormal = normalMatches[1]
-            for i = 2, #normalMatches do
-                if #normalMatches[i] < #shortestNormal then
-                    shortestNormal = normalMatches[i]
+
+        if priorityMode == "Special" then
+            if #specialMatches > 0 then
+                finalword = specialMatches[math.random(1, #specialMatches)]
+            elseif #validMatches > 0 then
+                local shortest = validMatches[1]
+                for i = 2, #validMatches do
+                    if #validMatches[i] < #shortest then
+                        shortest = validMatches[i]
+                    end
                 end
+                finalword = shortest
             end
-            finalword = shortestNormal
+        elseif priorityMode == "Long" then
+            if #validMatches > 0 then
+                local longest = validMatches[1]
+                for i = 2, #validMatches do
+                    if #validMatches[i] > #longest then
+                        longest = validMatches[i]
+                    end
+                end
+                finalword = longest
+            end
+        elseif priorityMode == "Short" then
+            if #validMatches > 0 then
+                local shortest = validMatches[1]
+                for i = 2, #validMatches do
+                    if #validMatches[i] < #shortest then
+                        shortest = validMatches[i]
+                    end
+                end
+                finalword = shortest
+            end
         end
 
         if finalword then
@@ -491,19 +484,25 @@ MainTab:CreateButton({
     end 
 })
 
--- === UI ELEMENTS (SETTINGS TAB) ===
-SettingsTab:CreateSlider({
-   Name = "🔍 Window Scale 🔍",
-   Info = "Adjust UI overall size (50% to 150%)",
-   Range = {50, 150},
-   Increment = 5,
-   Suffix = "%",
-   CurrentValue = 100,
-   Callback = function(Value)
-      setWindowScale(Value / 100)
+-- === UI ELEMENTS (DICTIONARY TAB) ===
+DictTab:CreateDropdown({
+   Name = "Priority Words",
+   Options = {"Special (Hyphen/Quotes)", "Long Words", "Short Words"},
+   CurrentOption = {"Special (Hyphen/Quotes)"},
+   MultipleOptions = false,
+   Callback = function(Option)
+      local selected = type(Option) == "table" and Option[1] or Option
+      if selected == "Long Words" then
+          priorityMode = "Long"
+      elseif selected == "Short Words" then
+          priorityMode = "Short"
+      else
+          priorityMode = "Special"
+      end
    end,
 })
 
+-- === UI ELEMENTS (SETTINGS TAB) ===
 SettingsTab:CreateSlider({
    Name = "Auto Join Delay",
    Info = "Delay before auto joining game (1s to 5s)",
