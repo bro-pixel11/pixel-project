@@ -1,25 +1,26 @@
 --[[
     Bro-PixelScript (wordbomb) - Rayfield Colorful Edition
-    [AUTHENTICATION: Individual Key + Permanent HWID via GitHub JSON]
+    [AUTHENTICATION: Loader Key + Permanent HWID]
     [DICTIONARY: 282k full_dict.txt Only | STRATEGY: Special Characters (Random) -> Shortest Word]
-    (UPDATED: Auto Join Delay, Auto-Clear Memory on Join, Anti-Dupe & Custom Search Logic)
 ]]
 
+-- === БЛОК ПРОВЕРКИ КЛЮЧА И HWID ===
 local RbxAnalytics = game:GetService("RbxAnalyticsService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 local userHWID = RbxAnalytics:GetClientId()
-
--- 🔗 Твоя сырая ссылка на базу ключей и HWID
 local KEYS_URL = "https://raw.githubusercontent.com/bro-pixel11/keys.json/main/auth.json"
 
--- === ФУНКЦИЯ ПРОВЕРКИ КЛЮЧА И HWID ===
-local function verifyKeyAndHWID(inputKey)
-    if not inputKey or inputKey == "" then 
-        return false, "Ключ не введен!" 
-    end
+-- Считываем ключ из глобальной переменной PixelKey
+local userProvidedKey = getgenv().PixelKey or _G.PixelKey or PixelKey
 
+if not userProvidedKey or userProvidedKey == "" then
+    Players.LocalPlayer:Kick("❌ Ошибка: Ключ не найден! Укажите getgenv().PixelKey = 'ВАШ_КЛЮЧ' перед loadstring.")
+    return
+end
+
+local function authenticate()
     local success, response = pcall(function()
         return game:HttpGet(KEYS_URL)
     end)
@@ -36,29 +37,41 @@ local function verifyKeyAndHWID(inputKey)
         return false, "Ошибка чтения базы ключей!"
     end
 
-    local registeredHWID = keysData[inputKey]
+    local registeredHWID = keysData[userProvidedKey]
 
     if not registeredHWID then
-        return false, "Недействительный ключ!"
+        return false, "Неверный ключ доступа!"
     end
 
     if registeredHWID == userHWID then
-        return true, "Успешная авторизация!"
+        return true, "Успешно!"
     end
 
     if registeredHWID == "UNASSIGNED" then
-        return false, "Ключ не активирован! Скопируйте ваш HWID и отправьте для привязки:\n" .. userHWID
+        return false, "Ключ не активирован. Ваш HWID:\n" .. userHWID
     end
 
     return false, "Этот ключ привязан к другому устройству!"
 end
+
+local isAuthenticated, authMessage = authenticate()
+
+if not isAuthenticated then
+    Players.LocalPlayer:Kick("🔒 [Bro-Pixel Auth]: " .. authMessage)
+    error("[AUTH FAILED]: " .. authMessage)
+    return
+end
+
+print("✅ Авторизация прошла успешно! Загрузка Bro-PixelScript...")
+
+-- === ОСНОВНОЙ СКРИПТ ===
 
 getgenv().deletewhendupefound = true
 
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Создание окна с встроенной защитой KeySystem
+-- Создание окна
 local Window = Rayfield:CreateWindow({
    Name = "🎨 Bro-PixelScript (wordbomb) 🎨",
    LoadingTitle = "⚡ Bro-Pixel Loader ⚡",
@@ -69,25 +82,7 @@ local Window = Rayfield:CreateWindow({
    DisableBuildWarnings = false,
 
    ConfigurationSaving = { Enabled = false },
-   
-   -- 🔑 СИСТЕМА КЛЮЧЕЙ
-   KeySystem = true,
-   KeySettings = {
-      Title = "🔑 Bro-Pixel Auth System",
-      Subtitle = "Введите ваш персональный ключ",
-      Note = "Скопируйте HWID, если ключ не активирован",
-      FileName = "BroPixelSavedKey",
-      SaveKey = true,
-      
-      Key = { function(input)
-          local isOk, message = verifyKeyAndHWID(input)
-          if not isOk then
-              warn("[AUTH]: " .. message)
-          end
-          return isOk
-      end }
-   },
-   
+   KeySystem = false, -- Отключено, так как проверка прошла перед запуском
    Size = UDim2.fromOffset(340, 280),
    
    CustomTheme = {
@@ -483,7 +478,7 @@ function copyword(bruteforce)
     end
 end
 
--- === ФОНОВЫЙ ПОТОК ДЛЯ ПОДКЛЮЧЕНИЯ AUTO JOIN + СБРОС ПАМЯТИ ===
+-- === ФОНОВЫЙ ПОТОК AUTO JOIN + СБРОС ПАМЯТИ ===
 if Games then
     local registerGame = Games:FindFirstChild("RegisterGame")
     if registerGame then
@@ -504,7 +499,7 @@ if Games then
     end
 end
 
--- === ОПТИМИЗИРОВАННЫЙ СТИЛЕР ЧУЖИХ ОТВЕТОВ (ANTI-DUPE) ===
+-- === ANTI-DUPE ===
 task.spawn(function()
     while task.wait(0.3) do
         local localPlayer = Players.LocalPlayer
