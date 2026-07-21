@@ -65,39 +65,27 @@ end
 
 print("✅ Авторизация прошла успешно! Загрузка Bro-PixelScript...")
 
--- === КАСТОМНАЯ ТЕМА UI ===
-_G.CustomTheme = {
-    Tab_Color = Color3.fromRGB(31, 32, 33),
-    Tab_Text_Color = Color3.fromRGB(255, 255, 255),
-    Description_Color = Color3.fromRGB(31, 32, 33),
-    Description_Text_Color = Color3.fromRGB(0, 240, 200),
-    Container_Color = Color3.fromRGB(25, 10, 40),
-    Container_Text_Color = Color3.fromRGB(255, 255, 255),
-    Button_Text_Color = Color3.fromRGB(255, 255, 255),
-    Toggle_Box_Color = Color3.fromRGB(35, 15, 55),
-    Toggle_Inner_Color = Color3.fromRGB(0, 240, 200),
-    Toggle_Text_Color = Color3.fromRGB(255, 255, 255),
-    Toggle_Border_Color = Color3.fromRGB(140, 50, 255),
-    Slider_Bar_Color = Color3.fromRGB(35, 15, 55),
-    Slider_Inner_Color = Color3.fromRGB(0, 240, 200),
-    Slider_Text_Color = Color3.fromRGB(255, 255, 255),
-    Slider_Border_Color = Color3.fromRGB(140, 50, 255),
-    Dropdown_Text_Color = Color3.fromRGB(255, 255, 255),
-    Dropdown_Option_BorderSize = 1,
-    Dropdown_Option_BorderColor = Color3.fromRGB(140, 50, 255),
-    Dropdown_Option_Color = Color3.fromRGB(25, 10, 40),
-    Dropdown_Option_Text_Color = Color3.fromRGB(255, 255, 255),
-    TextBox_Text_Color = Color3.fromRGB(255, 255, 255),
-    TextBox_Color = Color3.fromRGB(35, 15, 55),
-    TextBox_Underline_Color = Color3.fromRGB(0, 240, 200)
+-- === ЗАГРУЗКА FLUENT UI ===
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "Bro-PixelScript (Word Bomb)",
+    SubTitle = "by Bro-Pixel",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
--- === ЗАГРУЗКА БИБЛИОТЕКИ UI ===
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/gabescripts/lua/refs/heads/scripts/Libraries/Azure%20UI%20Library%20Source.lua"))()
-
-
-local MainTab = Library:CreateTab("🪐", "Main Features", nil)
-local SettingsTab = Library:CreateTab("⚙️", "Configuration", nil)
+local Options = Fluent.Options
 
 -- === СОСТОЯНИЕ И НАСТРОЙКИ ===
 local globalWordsList = {} 
@@ -125,15 +113,20 @@ local speedWordDelay = 60 / (typingWPM * 5)
 local Vim = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- === СТАТИСТИКА (Эмуляция лейблов через TextBox/кнопки или текст) ===
--- Создаем информационные блоки в Main вкладке
-MainTab:CreateTextBox("Status: Loading 282k dict...", function() end)
+-- === СТАТУС / ПАРАГРАФ ДЛЯ СЛОВАРЯ ===
+local StatusParagraph = Tabs.Main:AddParagraph({
+    Title = "Dictionary Status",
+    Content = "⏳ Loading 282k dictionary..."
+})
 
 -- === ЗАГРУЗКА СЛОВАРЯ ===
 local function loadDictionaryAsync(url)
     task.spawn(function()
         local success, raw = pcall(function() return game:HttpGet(url) end)
-        if not success or not raw then return end
+        if not success or not raw then 
+            StatusParagraph:SetDesc("❌ Failed to load dictionary!")
+            return 
+        end
         
         local total = 0
         for word in raw:gmatch("[^\r\n]+") do
@@ -144,7 +137,7 @@ local function loadDictionaryAsync(url)
                 if total % 5000 == 0 then task.wait() end
             end
         end
-        print("📚 Dictionary loaded: " .. total .. " words")
+        StatusParagraph:SetDesc("📚 Dictionary loaded: " .. total .. " words (Ready)")
     end)
 end
 
@@ -154,13 +147,24 @@ loadDictionaryAsync("https://raw.githubusercontent.com/bro-pixel11/fullwords/mai
 local Games = ReplicatedStorage:WaitForChild("Network", 10)
 if Games then Games = Games:WaitForChild("Games", 10) end
 
--- === UI КОМПОНЕНТЫ (MAIN TAB) ===
-MainTab:CreateTextBox("Letter Cap (Max Length)", function(Text)
-    lettercap = tonumber(Text) or math.huge
-end)
+-- === UI ЭЛЕМЕНТЫ (MAIN TAB) ===
+Tabs.Main:AddInput("LetterCapInput", {
+    Title = "Letter Cap",
+    Description = "Max letter count for words (leave high if none)",
+    Default = "",
+    Placeholder = "Enter max length...",
+    Numeric = true,
+    Finished = false,
+    Callback = function(Value)
+        lettercap = tonumber(Value) or math.huge
+    end
+})
 
-MainTab:CreateToggle("Auto Search", function(Value)
-    autosearch = Value
+Tabs.Main:AddToggle("AutoSearch", {
+    Title = "Auto Search",
+    Default = false
+}):OnChanged(function()
+    autosearch = Options.AutoSearch.Value
     if autosearch then
         task.spawn(function()
             while autosearch do task.wait(0.05); pcall(copyword) end
@@ -168,16 +172,25 @@ MainTab:CreateToggle("Auto Search", function(Value)
     end
 end)
 
-MainTab:CreateToggle("Auto Type (Mobile)", function(Value)
-    autotype = Value
+Tabs.Main:AddToggle("AutoType", {
+    Title = "Auto Type (Mobile)",
+    Default = false
+}):OnChanged(function()
+    autotype = Options.AutoType.Value
 end)
 
-MainTab:CreateToggle("Instant Type (No Delay)", function(Value)
-    instanttype = Value
+Tabs.Main:AddToggle("InstantType", {
+    Title = "⚡ Instant Type (No Delay)",
+    Default = false
+}):OnChanged(function()
+    instanttype = Options.InstantType.Value
 end)
 
-MainTab:CreateToggle("Auto Join Game", function(Value)
-    autojoin = Value
+Tabs.Main:AddToggle("AutoJoin", {
+    Title = "🚪 Auto Join Game",
+    Default = false
+}):OnChanged(function()
+    autojoin = Options.AutoJoin.Value
     if autojoin and Games then
         task.spawn(function()
             if autoJoinDelay > 0 then task.wait(autoJoinDelay) end
@@ -191,35 +204,80 @@ MainTab:CreateToggle("Auto Join Game", function(Value)
     end
 end)
 
-MainTab:CreateButton("Search Word (Manual)", function()
-    copyword(true)
+Tabs.Main:AddButton({
+    Title = "🔥 Search Word (Manual)",
+    Description = "Forces a manual word search",
+    Callback = function()
+        copyword(true)
+    end
+})
+
+Tabs.Main:AddButton({
+    Title = "🗑️ Clear Memory",
+    Description = "Clears session used words history",
+    Callback = function()
+        sessionUsedWords = {}
+        Fluent:Notify({ Title = "Memory", Content = "Session words cleared!", Duration = 3 })
+    end
+})
+
+-- === UI ЭЛЕМЕНТЫ (SETTINGS TAB) ===
+Tabs.Settings:AddSlider("AutoJoinDelaySlider", {
+    Title = "Auto Join Delay",
+    Description = "Delay before joining a game",
+    Default = 2,
+    Min = 1,
+    Max = 5,
+    Rounding = 0,
+    Callback = function(Value)
+        autoJoinDelay = Value
+    end
+})
+
+Tabs.Settings:AddSlider("CheckWordDelaySlider", {
+    Title = "Check Word Delay",
+    Description = "Delay before typing starts",
+    Default = 1.0,
+    Min = 0.1,
+    Max = 2.0,
+    Rounding = 1,
+    Callback = function(Value)
+        checkWordDelay = Value
+    end
+})
+
+Tabs.Settings:AddSlider("TypingWPMSlider", {
+    Title = "Typing WPM",
+    Description = "Words Per Minute speed",
+    Default = 500,
+    Min = 100,
+    Max = 1000,
+    Rounding = 0,
+    Callback = function(Value)
+        typingWPM = Value
+        speedWordDelay = 60 / (typingWPM * 5)
+    end
+})
+
+Tabs.Settings:AddToggle("HumanJitter", {
+    Title = "Human Jittering",
+    Description = "Slight realistic delay fluctuations",
+    Default = false
+}):OnChanged(function()
+    jitterEnabled = Options.HumanJitter.Value
 end)
 
-MainTab:CreateButton("Clear Memory", function()
-    sessionUsedWords = {}
-end)
-
--- === UI КОМПОНЕНТЫ (SETTINGS TAB) ===
-SettingsTab:CreateSlider("Auto Join Delay (sec)", 1, 5, function(Value)
-    autoJoinDelay = Value
-end)
-
-SettingsTab:CreateSlider("Check Word Delay (x0.1s)", 1, 20, function(Value)
-    checkWordDelay = Value / 10
-end)
-
-SettingsTab:CreateSlider("Typing WPM", 100, 1000, function(Value)
-    typingWPM = Value
-    speedWordDelay = 60 / (typingWPM * 5)
-end)
-
-SettingsTab:CreateToggle("Human Jittering", function(Value)
-    jitterEnabled = Value
-end)
-
-SettingsTab:CreateSlider("Jitter Intensity", 1, 20, function(Value)
-    jitterIntensity = Value / 100
-end)
+Tabs.Settings:AddSlider("JitterIntensitySlider", {
+    Title = "Jitter Strength",
+    Description = "Intensity of delay fluctuations",
+    Default = 0.05,
+    Min = 0.01,
+    Max = 0.2,
+    Rounding = 2,
+    Callback = function(Value)
+        jitterIntensity = Value
+    end
+})
 
 -- === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ИГРЫ ===
 local function getChunk()
@@ -245,7 +303,7 @@ local function getGameStatus()
         local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
         if playerGui then
             for _, v in pairs(playerGui:GetDescendants()) do
-                if v:IsA("TextLabel") and v.Visible and v.Parent.Name ~= "uiui" then
+                if v:IsA("TextLabel") and v.Visible and v.Parent.Name ~= "Fluent" then
                     local text = v.Text:lower()
                     if string.find(text, "quick") or string.find(text, "быстро") or string.find(text, "your turn") or string.find(text, "ходи") then
                         isMyTurn = true
@@ -264,7 +322,7 @@ local function getGameTextBox()
     local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
     if not playerGui then return nil end
     for _, v in pairs(playerGui:GetDescendants()) do
-        if v:IsA("TextBox") and v.Visible and v.Parent.Name ~= "uiui" then return v end
+        if v:IsA("TextBox") and v.Visible and v.Parent.Name ~= "Fluent" then return v end
     end
     return nil
 end
@@ -431,4 +489,23 @@ task.spawn(function()
     end
 end)
 
-print("🚀 Bro-PixelScript успешно инициализирован с кастомным интерфейсом!")
+-- Настройка менеджеров сохранения/интерфейса Fluent
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("BroPixelScript")
+SaveManager:SetFolder("BroPixelScript/wordbomb")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "Bro-PixelScript",
+    Content = "Successfully loaded with Fluent UI!",
+    Duration = 5
+})
+
+SaveManager:LoadAutoloadConfig()
