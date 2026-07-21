@@ -35,7 +35,6 @@ local function authenticate()
         return false, "Неверный ключ доступа!"
     end
 
-    -- Если в auth.json указан массив (список) из нескольких HWID
     if type(registeredHWID) == "table" then
         for _, allowedHWID in ipairs(registeredHWID) do
             if allowedHWID == userHWID then
@@ -45,7 +44,6 @@ local function authenticate()
         return false, "Ваш HWID не найден в списке разрешённых!\nВаш HWID: " .. tostring(userHWID)
     end
 
-    -- Если в auth.json указана одиночная строка HWID
     if registeredHWID == userHWID then
         return true, "Успешно!"
     end
@@ -88,7 +86,7 @@ local Window = Rayfield:CreateWindow({
    DisableBuildWarnings = false,
 
    ConfigurationSaving = { Enabled = false },
-   KeySystem = false, -- Отключено, так как проверка прошла перед запуском
+   KeySystem = false,
    Size = UDim2.fromOffset(340, 280),
    
    CustomTheme = {
@@ -100,6 +98,24 @@ local Window = Rayfield:CreateWindow({
         PlaceholderColor = Color3.fromRGB(180, 150, 220)
    }
 })
+
+-- Инициализация UIScale для изменения размера окна
+local uiScaler = nil
+task.spawn(function()
+    task.wait(0.5)
+    local coreGui = game:GetService("CoreGui")
+    local rayfieldGui = coreGui:FindFirstChild("Rayfield") or Players.LocalPlayer:FindFirstChildOfClass("PlayerGui"):FindFirstChild("Rayfield")
+    if rayfieldGui then
+        local mainFrame = rayfieldGui:FindFirstChild("Main", true) or rayfieldGui:FindFirstChildWhichIsA("Frame", true)
+        if mainFrame then
+            uiScaler = mainFrame:FindFirstChildOfClass("UIScale")
+            if not uiScaler then
+                uiScaler = Instance.new("UIScale")
+                uiScaler.Parent = mainFrame
+            end
+        end
+    end
+end)
 
 -- Создание вкладок
 local MainTab = Window:CreateTab("🪐 Main", nil)
@@ -147,7 +163,7 @@ local autojoin = false
 local autoJoinDelay = 2 
 local jitterEnabled = false 
 local jitterIntensity = 0.05 
-local rngVariationPercent = 0 -- Вариация от 0% до 100%
+local rngVariationPercent = 0 
 
 local lastChunk = ""
 local lastTypeTime = 0
@@ -164,7 +180,6 @@ local speedWordDelay = 60 / (typingWPM * 5)
 local Vim = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Вспомогательная функция для генерации вариации в диапазоне [-rngVariationPercent, +rngVariationPercent]
 local function applyRngVariation(baseValue)
     if rngVariationPercent <= 0 then return baseValue end
     local factor = 1 + ((math.random() * 2 - 1) * (rngVariationPercent / 100))
@@ -247,7 +262,6 @@ local function typeWordMobile(word, targetPrompt)
     if isTyping then return end 
     isTyping = true 
     
-    -- Применяем RNG к задержке перед вводом
     if not instanttype and checkWordDelay > 0 then 
         local finalDelay = applyRngVariation(checkWordDelay)
         task.wait(finalDelay) 
@@ -288,7 +302,6 @@ local function typeWordMobile(word, targetPrompt)
             if instanttype then
                 currentDelay = 0
             else
-                -- Применяем RNG вариацию к скорости нажатия каждого символа
                 currentDelay = applyRngVariation(speedWordDelay)
                 
                 if jitterEnabled then
@@ -467,6 +480,20 @@ MainTab:CreateButton({
 })
 
 -- === UI ELEMENTS (SETTINGS TAB) ===
+SettingsTab:CreateSlider({
+   Name = "🔍 Window Scale 🔍",
+   Info = "Adjust UI overall size (50% to 150%)",
+   Range = {50, 150},
+   Increment = 5,
+   Suffix = "%",
+   CurrentValue = 100,
+   Callback = function(Value)
+      if uiScaler then
+          uiScaler.Scale = Value / 100
+      end
+   end,
+})
+
 SettingsTab:CreateSlider({
    Name = "Auto Join Delay",
    Info = "Delay before auto joining game (1s to 5s)",
