@@ -93,7 +93,8 @@ _G.CustomTheme = {
 }
 
 -- === ЗАГРУЗКА БИБЛИОТЕКИ UI ===
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/bro-pixel11/pixel-project/main/ui.lua"))()
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/gabescripts/lua/refs/heads/scripts/Libraries/Azure%20UI%20Library%20Source.lua"))()
+
 
 local MainTab = Library:CreateTab("🪐", "Main Features", nil)
 local SettingsTab = Library:CreateTab("⚙️", "Configuration", nil)
