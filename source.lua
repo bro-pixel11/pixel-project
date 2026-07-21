@@ -147,6 +147,8 @@ local autojoin = false
 local autoJoinDelay = 2 
 local jitterEnabled = false 
 local jitterIntensity = 0.05 
+local rngVariationPercent = 0 -- Вариация от 0% до 100%
+
 local lastChunk = ""
 local lastTypeTime = 0
 local wasMyTurn = false
@@ -161,6 +163,14 @@ local speedWordDelay = 60 / (typingWPM * 5)
 
 local Vim = game:GetService("VirtualInputManager")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Вспомогательная функция для генерации вариации в диапазоне [-rngVariationPercent, +rngVariationPercent]
+local function applyRngVariation(baseValue)
+    if rngVariationPercent <= 0 then return baseValue end
+    local factor = 1 + ((math.random() * 2 - 1) * (rngVariationPercent / 100))
+    local result = baseValue * factor
+    return result < 0 and 0 or result
+end
 
 -- === ИНИЦИАЛИЗАЦИЯ СЕТЕВЫХ СОБЫТИЙ ДЛЯ AUTO JOIN ===
 local Games = ReplicatedStorage:WaitForChild("Network", 10)
@@ -237,7 +247,11 @@ local function typeWordMobile(word, targetPrompt)
     if isTyping then return end 
     isTyping = true 
     
-    if not instanttype and checkWordDelay > 0 then task.wait(checkWordDelay) end
+    -- Применяем RNG к задержке перед вводом
+    if not instanttype and checkWordDelay > 0 then 
+        local finalDelay = applyRngVariation(checkWordDelay)
+        task.wait(finalDelay) 
+    end
     
     local currentPrompt, isMyTurn = getGameStatus()
     if currentPrompt ~= targetPrompt or not isMyTurn then
@@ -273,9 +287,16 @@ local function typeWordMobile(word, targetPrompt)
             
             if instanttype then
                 currentDelay = 0
-            elseif jitterEnabled then
-                local randomOffset = (math.random() * 2 - 1) * jitterIntensity
-                currentDelay = speedWordDelay + randomOffset
+            else
+                -- Применяем RNG вариацию к скорости нажатия каждого символа
+                currentDelay = applyRngVariation(speedWordDelay)
+                
+                if jitterEnabled then
+                    local currentJitter = applyRngVariation(jitterIntensity)
+                    local randomOffset = (math.random() * 2 - 1) * currentJitter
+                    currentDelay = currentDelay + randomOffset
+                end
+                
                 if currentDelay < 0.005 then currentDelay = 0.005 end
             end
             
@@ -476,6 +497,18 @@ SettingsTab:CreateSlider({
    Callback = function(Value)
       typingWPM = Value
       speedWordDelay = 60 / (typingWPM * 5)
+   end,
+})
+
+SettingsTab:CreateSlider({
+   Name = "🎲 RNG Variation 🎲",
+   Info = "Random speed & delay variation (+-0% to +-100%)",
+   Range = {0, 100},
+   Increment = 5,
+   Suffix = "%",
+   CurrentValue = 0,
+   Callback = function(Value)
+      rngVariationPercent = Value
    end,
 })
 
