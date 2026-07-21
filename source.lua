@@ -71,6 +71,9 @@ print("✅ Авторизация прошла успешно! Загрузка 
 
 getgenv().deletewhendupefound = true
 
+-- Предварительное объявление UI элементов статистики
+local elapsedLabel, turnsLabel, promptLabel, solutionsLabel, matchLabel
+
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -167,7 +170,6 @@ if Games then Games = Games:WaitForChild("Games", 10) end
 local cachedUpdateFunc = nil
 
 local function getChunk()
-    -- Быстрая проверка через кэшированную функцию без вызова getgc(true)
     if cachedUpdateFunc then
         local ok, prompt = pcall(function()
             for _, up in pairs(debug.getupvalues(cachedUpdateFunc)) do
@@ -176,18 +178,17 @@ local function getChunk()
                 end
             end
         end)
-        if ok and prompt then return prompt end
-        cachedUpdateFunc = nil -- Сброс кэша при сбое
+        if ok and prompt and prompt ~= "" then return prompt end
+        cachedUpdateFunc = nil
     end
 
-    -- Сканирование GC только если кэш пуст
     for _, v in pairs(getgc(true)) do
         if type(v) == "function" then
             local info = debug.getinfo(v)
             if info and info.name == "updateInfoFrame" then
-                cachedUpdateFunc = v
                 for _, up in pairs(debug.getupvalues(v)) do
-                    if type(up) == "table" and up.Prompt then 
+                    if type(up) == "table" and up.Prompt then
+                        cachedUpdateFunc = v
                         return tostring(up.Prompt):lower() 
                     end
                 end
@@ -496,12 +497,12 @@ SettingsTab:CreateSlider({
 })
 
 -- === STATS PANEL ===
-local StatsSection = MainTab:CreateSection("📊 Statistics 📊")
-local elapsedLabel = MainTab:CreateLabel("Elapsed Time: 00:00:00")
-local turnsLabel = MainTab:CreateLabel("Total Turns: 0")
-local promptLabel = MainTab:CreateLabel("Current Prompt: None")
-local solutionsLabel = MainTab:CreateLabel("Solutions Found: 0")
-local matchLabel = MainTab:CreateLabel("Current Match: None")
+MainTab:CreateSection("📊 Statistics 📊")
+elapsedLabel = MainTab:CreateLabel("Elapsed Time: 00:00:00")
+turnsLabel = MainTab:CreateLabel("Total Turns: 0")
+promptLabel = MainTab:CreateLabel("Current Prompt: None")
+solutionsLabel = MainTab:CreateLabel("Solutions Found: 0")
+matchLabel = MainTab:CreateLabel("Current Match: None")
 MainTab:CreateSection("------------------")
 
 -- === ФОНОВЫЙ ПОТОК AUTO JOIN + СБРОС ПАМЯТИ ===
@@ -516,7 +517,7 @@ if Games then
                     pcall(function() 
                         Games.GameEvent:FireServer(gameRoomID, "JoinGame") 
                         sessionUsedWords = {}
-                        cachedUpdateFunc = nil -- Сброс кэша при входе в новую комнату
+                        cachedUpdateFunc = nil 
                         if matchLabel then matchLabel:Set("Current Match: Cleared (New Game)") end
                         print("🚪 [Auto-Join]: Зашли в комнату:", gameRoomID, "| Память слов очищена")
                     end)
