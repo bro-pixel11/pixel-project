@@ -99,29 +99,41 @@ local Window = Rayfield:CreateWindow({
    }
 })
 
--- Инициализация UIScale для изменения размера окна
-local uiScaler = nil
-task.spawn(function()
-    task.wait(0.5)
-    local coreGui = game:GetService("CoreGui")
-    local rayfieldGui = coreGui:FindFirstChild("Rayfield") or Players.LocalPlayer:FindFirstChildOfClass("PlayerGui"):FindFirstChild("Rayfield")
-    if rayfieldGui then
-        local mainFrame = rayfieldGui:FindFirstChild("Main", true) or rayfieldGui:FindFirstChildWhichIsA("Frame", true)
-        if mainFrame then
-            uiScaler = mainFrame:FindFirstChildOfClass("UIScale")
-            if not uiScaler then
-                uiScaler = Instance.new("UIScale")
-                uiScaler.Parent = mainFrame
-            end
-        end
-    end
-end)
-
 -- Создание вкладок
 local MainTab = Window:CreateTab("🪐 Main", nil)
 local SettingsTab = Window:CreateTab("⚙️ Settings", nil)
 
 local statusLabel = MainTab:CreateLabel("⏳ Loading and indexing 282k dictionary...")
+
+-- Функция поиска главного фрейма Rayfield
+local function getRayfieldMainFrame()
+    local coreGui = game:GetService("CoreGui")
+    local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    
+    local rayfieldGui = coreGui:FindFirstChild("Rayfield") or (playerGui and playerGui:FindFirstChild("Rayfield"))
+    if rayfieldGui then
+        for _, descendant in pairs(rayfieldGui:GetDescendants()) do
+            if descendant:IsA("Frame") and (descendant.Name == "Main" or descendant.Name == "MainFrame" or descendant:FindFirstChild("TopBar")) then
+                return descendant
+            end
+        end
+        return rayfieldGui:FindFirstChildWhichIsA("Frame")
+    end
+    return nil
+end
+
+-- Функция установщика размера
+local function setWindowScale(scaleValue)
+    local mainFrame = getRayfieldMainFrame()
+    if mainFrame then
+        local scaler = mainFrame:FindFirstChildOfClass("UIScale")
+        if not scaler then
+            scaler = Instance.new("UIScale")
+            scaler.Parent = mainFrame
+        end
+        scaler.Scale = scaleValue
+    end
+end
 
 -- Основная база слов
 local globalWordsList = {} 
@@ -488,9 +500,7 @@ SettingsTab:CreateSlider({
    Suffix = "%",
    CurrentValue = 100,
    Callback = function(Value)
-      if uiScaler then
-          uiScaler.Scale = Value / 100
-      end
+      setWindowScale(Value / 100)
    end,
 })
 
