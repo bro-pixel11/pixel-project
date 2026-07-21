@@ -1,15 +1,64 @@
 --[[
     Bro-PixelScript (wordbomb) - Rayfield Colorful Edition
+    [AUTHENTICATION: Individual Key + Permanent HWID via GitHub JSON]
     [DICTIONARY: 282k full_dict.txt Only | STRATEGY: Special Characters (Random) -> Shortest Word]
     (UPDATED: Auto Join Delay, Auto-Clear Memory on Join, Anti-Dupe & Custom Search Logic)
 ]]
+
+local RbxAnalytics = game:GetService("RbxAnalyticsService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local userHWID = RbxAnalytics:GetClientId()
+
+-- 🔗 Твоя сырая ссылка на базу ключей и HWID
+local KEYS_URL = "https://raw.githubusercontent.com/bro-pixel11/keys.json/main/auth.json"
+
+-- === ФУНКЦИЯ ПРОВЕРКИ КЛЮЧА И HWID ===
+local function verifyKeyAndHWID(inputKey)
+    if not inputKey or inputKey == "" then 
+        return false, "Ключ не введен!" 
+    end
+
+    local success, response = pcall(function()
+        return game:HttpGet(KEYS_URL)
+    end)
+
+    if not success or not response then
+        return false, "Ошибка подключения к серверу авторизации!"
+    end
+
+    local ok, keysData = pcall(function()
+        return HttpService:JSONDecode(response)
+    end)
+
+    if not ok or type(keysData) ~= "table" then
+        return false, "Ошибка чтения базы ключей!"
+    end
+
+    local registeredHWID = keysData[inputKey]
+
+    if not registeredHWID then
+        return false, "Недействительный ключ!"
+    end
+
+    if registeredHWID == userHWID then
+        return true, "Успешная авторизация!"
+    end
+
+    if registeredHWID == "UNASSIGNED" then
+        return false, "Ключ не активирован! Скопируйте ваш HWID и отправьте для привязки:\n" .. userHWID
+    end
+
+    return false, "Этот ключ привязан к другому устройству!"
+end
 
 getgenv().deletewhendupefound = true
 
 -- Загрузка Rayfield UI
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Создание сочного цветного окна
+-- Создание окна с встроенной защитой KeySystem
 local Window = Rayfield:CreateWindow({
    Name = "🎨 Bro-PixelScript (wordbomb) 🎨",
    LoadingTitle = "⚡ Bro-Pixel Loader ⚡",
@@ -20,7 +69,25 @@ local Window = Rayfield:CreateWindow({
    DisableBuildWarnings = false,
 
    ConfigurationSaving = { Enabled = false },
-   KeySystem = false,
+   
+   -- 🔑 СИСТЕМА КЛЮЧЕЙ
+   KeySystem = true,
+   KeySettings = {
+      Title = "🔑 Bro-Pixel Auth System",
+      Subtitle = "Введите ваш персональный ключ",
+      Note = "Скопируйте HWID, если ключ не активирован",
+      FileName = "BroPixelSavedKey",
+      SaveKey = true,
+      
+      Key = { function(input)
+          local isOk, message = verifyKeyAndHWID(input)
+          if not isOk then
+              warn("[AUTH]: " .. message)
+          end
+          return isOk
+      end }
+   },
+   
    Size = UDim2.fromOffset(340, 280),
    
    CustomTheme = {
@@ -42,7 +109,7 @@ local statusLabel = MainTab:CreateLabel("⏳ Loading and indexing 282k dictionar
 -- Основная база слов
 local globalWordsList = {} 
 
--- === АСИНХРОННАЯ ЗАГРУЗКА СЛОВАРЯ (БЕЗ ЗАВИСАНИЙ UI) ===
+-- === АСИНХРОННАЯ ЗАГРУЗКА СЛОВАРЯ ===
 local function loadDictionaryAsync(url)
     task.spawn(function()
         local success, raw = pcall(function() return game:HttpGet(url) end)
@@ -67,7 +134,6 @@ local function loadDictionaryAsync(url)
     end)
 end
 
--- Запускаем загрузку словаря асинхронно
 loadDictionaryAsync("https://raw.githubusercontent.com/bro-pixel11/fullwords/main/full_dict.txt")
 
 -- === STATE & SETTINGS ===
@@ -77,7 +143,7 @@ local autosearch = false
 local autotype = false
 local instanttype = false
 local autojoin = false
-local autoJoinDelay = 2 -- По умолчанию 2 секунды задержки
+local autoJoinDelay = 2 
 local jitterEnabled = false 
 local jitterIntensity = 0.05 
 local lastChunk = ""
@@ -93,7 +159,6 @@ local typingWPM = 500
 local speedWordDelay = 60 / (typingWPM * 5)
 
 local Vim = game:GetService("VirtualInputManager")
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- === ИНИЦИАЛИЗАЦИЯ СЕТЕВЫХ СОБЫТИЙ ДЛЯ AUTO JOIN ===
@@ -140,7 +205,7 @@ MainTab:CreateToggle({
         if autojoin and Games then
             task.spawn(function()
                 if autoJoinDelay > 0 then task.wait(autoJoinDelay) end
-                sessionUsedWords = {} -- Очищаем память при ручной активации
+                sessionUsedWords = {} 
                 pcall(function()
                     for i = -1, -20, -1 do 
                         Games.GameEvent:FireServer(i, "JoinGame") 
@@ -344,7 +409,7 @@ local function typeWordMobile(word, targetPrompt)
     isTyping = false 
 end
 
--- === МОДИФИЦИРОВАННАЯ ЛОГИКА ПОИСКА (ДЕФИС / АПОСТРОФ [РАНДОМ] -> МИН. ДЛИНА) ===
+-- === МОДИФИЦИРОВАННАЯ ЛОГИКА ПОИСКА ===
 function copyword(bruteforce)
     if isTyping then return end
     local contains, isMyTurn = getGameStatus()
@@ -425,13 +490,10 @@ if Games then
         registerGame.OnClientEvent:Connect(function(gameRoomID)
             if autojoin then 
                 task.spawn(function()
-                    -- Бесшовный легитный задержка входа
                     if autoJoinDelay > 0 then task.wait(autoJoinDelay) end
                     
                     pcall(function() 
                         Games.GameEvent:FireServer(gameRoomID, "JoinGame") 
-                        
-                        -- Автоматический сброс памяти использованных слов под новую катку
                         sessionUsedWords = {}
                         if matchLabel then matchLabel:Set("Current Match: Cleared (New Game)") end
                         print("🚪 [Auto-Join]: Зашли в комнату:", gameRoomID, "| Память слов очищена")
