@@ -1,7 +1,7 @@
 --[[
     Bro-PixelScript (wordbomb) - Rayfield Colorful Edition
     [DICTIONARY: 282k full_dict.txt Only | STRATEGY: Special Characters (Random) -> Shortest Word]
-    (UPDATED: Auto Join, Anti-Dupe Stealer, Async Dictionary Load & Custom Search Logic)
+    (UPDATED: Auto Join Delay, Auto-Clear Memory on Join, Anti-Dupe & Custom Search Logic)
 ]]
 
 getgenv().deletewhendupefound = true
@@ -58,7 +58,6 @@ local function loadDictionaryAsync(url)
                 total = total + 1
                 table.insert(globalWordsList, word)
                 
-                -- Раз в 5000 слов даем кадру обновиться, чтобы не вешать клиент
                 if total % 5000 == 0 then
                     task.wait()
                 end
@@ -78,6 +77,7 @@ local autosearch = false
 local autotype = false
 local instanttype = false
 local autojoin = false
+local autoJoinDelay = 2 -- По умолчанию 2 секунды задержки
 local jitterEnabled = false 
 local jitterIntensity = 0.05 
 local lastChunk = ""
@@ -138,10 +138,14 @@ MainTab:CreateToggle({
     Callback = function(Value)
         autojoin = Value
         if autojoin and Games then
-            pcall(function()
-                for i = -1, -20, -1 do 
-                    Games.GameEvent:FireServer(i, "JoinGame") 
-                end
+            task.spawn(function()
+                if autoJoinDelay > 0 then task.wait(autoJoinDelay) end
+                sessionUsedWords = {} -- Очищаем память при ручной активации
+                pcall(function()
+                    for i = -1, -20, -1 do 
+                        Games.GameEvent:FireServer(i, "JoinGame") 
+                    end
+                end)
             end)
         end
     end
@@ -154,10 +158,23 @@ MainTab:CreateButton({
 
 MainTab:CreateButton({ 
     Name = "🗑️ Clear Memory", 
-    Callback = function() sessionUsedWords = {}; matchLabel:Set("Current Match: Cleared") end 
+    Callback = function() 
+        sessionUsedWords = {}
+        if matchLabel then matchLabel:Set("Current Match: Cleared") end 
+    end 
 })
 
 -- === UI ELEMENTS (SETTINGS TAB) ===
+SettingsTab:CreateSlider({
+   Name = "Auto Join Delay",
+   Info = "Delay before auto joining game (1s to 5s)",
+   Range = {1, 5},
+   Increment = 1,
+   Suffix = " sec",
+   CurrentValue = 2,
+   Callback = function(Value) autoJoinDelay = Value end,
+})
+
 SettingsTab:CreateSlider({
    Name = "Check Word Delay",
    Info = "Delay before typing (0.1s to 2.0s)",
@@ -356,7 +373,6 @@ function copyword(bruteforce)
         local specialMatches = {}
         local normalMatches = {}
         
-        -- Сканируем единый большой словарь и разделяем на две группы
         for i = 1, #globalWordsList do
             local candidate = globalWordsList[i]
             if string.find(candidate, promptLower, 1, true) then
@@ -374,10 +390,8 @@ function copyword(bruteforce)
 
         local finalword = nil
         
-        -- Приоритет №1: Если есть спец-слова, выбираем РАНДОМНОЕ из них
         if #specialMatches > 0 then
             finalword = specialMatches[math.random(1, #specialMatches)]
-        -- Приоритет №2: Если спец-слов нет, выбираем САМОЕ КОРОТКОЕ из обычных
         elseif #normalMatches > 0 then
             local shortestNormal = normalMatches[1]
             for i = 2, #normalMatches do
@@ -404,15 +418,24 @@ function copyword(bruteforce)
     end
 end
 
--- === ФОНОВЫЙ ПОТОК ДЛЯ ПОДКЛЮЧЕНИЯ AUTO JOIN ===
+-- === ФОНОВЫЙ ПОТОК ДЛЯ ПОДКЛЮЧЕНИЯ AUTO JOIN + СБРОС ПАМЯТИ ===
 if Games then
     local registerGame = Games:FindFirstChild("RegisterGame")
     if registerGame then
         registerGame.OnClientEvent:Connect(function(gameRoomID)
             if autojoin then 
-                pcall(function() 
-                    Games.GameEvent:FireServer(gameRoomID, "JoinGame") 
-                    print("🚪 [Auto-Join]: Успешно зашли в комнату катки:", gameRoomID)
+                task.spawn(function()
+                    -- Бесшовный легитный задержка входа
+                    if autoJoinDelay > 0 then task.wait(autoJoinDelay) end
+                    
+                    pcall(function() 
+                        Games.GameEvent:FireServer(gameRoomID, "JoinGame") 
+                        
+                        -- Автоматический сброс памяти использованных слов под новую катку
+                        sessionUsedWords = {}
+                        if matchLabel then matchLabel:Set("Current Match: Cleared (New Game)") end
+                        print("🚪 [Auto-Join]: Зашли в комнату:", gameRoomID, "| Память слов очищена")
+                    end)
                 end)
             end
         end)
