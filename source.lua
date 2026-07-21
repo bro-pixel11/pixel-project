@@ -1,10 +1,3 @@
---[[
-    Bro-PixelScript (wordbomb) - Rayfield Colorful Edition
-    [AUTHENTICATION: Loader Key + Permanent HWID]
-    [DICTIONARY: 282k full_dict.txt Only | STRATEGY: Special Characters (Random) -> Shortest Word]
-]]
-
--- === БЛОК ПРОВЕРКИ КЛЮЧА И HWID ===
 local RbxAnalytics = game:GetService("RbxAnalyticsService")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -12,7 +5,6 @@ local Players = game:GetService("Players")
 local userHWID = RbxAnalytics:GetClientId()
 local KEYS_URL = "https://raw.githubusercontent.com/bro-pixel11/keys.json/main/auth.json"
 
--- Считываем ключ из глобальной переменной PixelKey
 local userProvidedKey = getgenv().PixelKey or _G.PixelKey or PixelKey
 
 if not userProvidedKey or userProvidedKey == "" then
@@ -43,15 +35,26 @@ local function authenticate()
         return false, "Неверный ключ доступа!"
     end
 
+    -- Если в auth.json указан массив (список) из нескольких HWID
+    if type(registeredHWID) == "table" then
+        for _, allowedHWID in ipairs(registeredHWID) do
+            if allowedHWID == userHWID then
+                return true, "Успешно!"
+            end
+        end
+        return false, "Ваш HWID не найден в списке разрешённых!\nВаш HWID: " .. tostring(userHWID)
+    end
+
+    -- Если в auth.json указана одиночная строка HWID
     if registeredHWID == userHWID then
         return true, "Успешно!"
     end
 
     if registeredHWID == "UNASSIGNED" then
-        return false, "Ключ не активирован. Ваш HWID:\n" .. userHWID
+        return false, "Ключ не активирован. Ваш HWID:\n" .. tostring(userHWID)
     end
 
-    return false, "Этот ключ привязан к другому устройству!"
+    return false, "Ключ привязан к другому HWID!\nВаш текущий HWID: " .. tostring(userHWID)
 end
 
 local isAuthenticated, authMessage = authenticate()
