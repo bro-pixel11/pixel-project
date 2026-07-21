@@ -164,13 +164,32 @@ local Games = ReplicatedStorage:WaitForChild("Network", 10)
 if Games then Games = Games:WaitForChild("Games", 10) end
 
 -- === HELPERS & CORE LOGIC ===
+local cachedUpdateFunc = nil
+
 local function getChunk()
+    -- Быстрая проверка через кэшированную функцию без вызова getgc(true)
+    if cachedUpdateFunc then
+        local ok, prompt = pcall(function()
+            for _, up in pairs(debug.getupvalues(cachedUpdateFunc)) do
+                if type(up) == "table" and up.Prompt then 
+                    return tostring(up.Prompt):lower() 
+                end
+            end
+        end)
+        if ok and prompt then return prompt end
+        cachedUpdateFunc = nil -- Сброс кэша при сбое
+    end
+
+    -- Сканирование GC только если кэш пуст
     for _, v in pairs(getgc(true)) do
         if type(v) == "function" then
             local info = debug.getinfo(v)
             if info and info.name == "updateInfoFrame" then
+                cachedUpdateFunc = v
                 for _, up in pairs(debug.getupvalues(v)) do
-                    if type(up) == "table" and up.Prompt then return tostring(up.Prompt):lower() end
+                    if type(up) == "table" and up.Prompt then 
+                        return tostring(up.Prompt):lower() 
+                    end
                 end
             end
         end
@@ -373,7 +392,7 @@ MainTab:CreateToggle({
       if autosearch then
           task.spawn(function()
               while autosearch do 
-                  task.wait(0.05)
+                  task.wait(0.15)
                   pcall(copyword) 
               end
           end)
@@ -497,6 +516,7 @@ if Games then
                     pcall(function() 
                         Games.GameEvent:FireServer(gameRoomID, "JoinGame") 
                         sessionUsedWords = {}
+                        cachedUpdateFunc = nil -- Сброс кэша при входе в новую комнату
                         if matchLabel then matchLabel:Set("Current Match: Cleared (New Game)") end
                         print("🚪 [Auto-Join]: Зашли в комнату:", gameRoomID, "| Память слов очищена")
                     end)
