@@ -19,4 +19,4 @@ Adding soon..
 
 ## Disclaimer
 
-For educational purposes only.
+Works only with HWID whitelist and my own key. 
