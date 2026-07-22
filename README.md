@@ -18,7 +18,7 @@ Roblox script for Word Bomb.
 
 ## Preview
 
-Adding soon..
+![Preview](preview.jpg)
 
 ## Disclaimer
 
