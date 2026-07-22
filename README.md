@@ -6,6 +6,9 @@ Roblox script for Word Bomb.
 
 - Auto Type
 - Auto Join
+- Instant Type
+- Realistic Typing
+- Big dictionary
 - Clean UI
 - Fast execution
 
